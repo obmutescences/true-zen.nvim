@@ -10,46 +10,13 @@ local fn = vim.fn
 local w = vim.w
 local api = vim.api
 local IGNORED_BUF_TYPES = data.set_of(cnf.modes.minimalist.ignored_buf_types)
-local minimum_writing_area = {
-	width = 70,
-	height = 100,
-}
-
-local wo = vim.wo
-
-local padding = {
-	left = 52,
-	right = 52,
-	top = 0,
-	bottom = 0,
-}
+local gwidth = cnf.modes.minimalist.minimum_writing_area.width
 
 local original_opts = {}
-
-local opts = {
-	bo = {
-		buftype = "nofile",
-		bufhidden = "hide",
-		modifiable = false,
-		buflisted = false,
-		swapfile = false,
-	},
-	wo = {
-		cursorline = false,
-		cursorcolumn = false,
-		number = false,
-		relativenumber = false,
-		foldenable = false,
-		list = false,
-	},
-}
 
 api.nvim_create_augroup("TrueZenMinimalist", {
 	clear = true,
 })
-
-local win = {}
-local CARDINAL_POINTS = { left = "width", right = "width", top = "height", bottom = "height" }
 
 -- reference: https://vim.fandom.com/wiki/Run_a_command_in_multiple_buffers
 local function alldo(run)
@@ -112,18 +79,33 @@ local function save_opts()
 	}
 end
 
+local win = {}
+local opts = {
+	bo = {
+		buftype = "nofile",
+		bufhidden = "hide",
+		modifiable = false,
+		buflisted = false,
+		swapfile = false,
+	},
+	wo = {
+		cursorline = false,
+		cursorcolumn = false,
+		number = false,
+		relativenumber = false,
+		foldenable = false,
+		list = false,
+	},
+}
+
+-- 添加新的padding窗口创建函数
 local function pad_win(new, props, move)
 	cmd(new)
-
 	local win_id = api.nvim_get_current_win()
 
 	if props.width ~= nil then
 		api.nvim_win_set_width(0, props.width)
-	else
-		api.nvim_win_set_height(0, props.height)
 	end
-
-	wo.winhighlight = "Normal:TZBackground"
 
 	for opt_type, _ in pairs(opts) do
 		for opt, val in pairs(opts[opt_type]) do
@@ -132,66 +114,32 @@ local function pad_win(new, props, move)
 	end
 
 	w.tz_pad_win = true
-
 	cmd(move)
 	return win_id
 end
 
-local function fix_padding(orientation, dimension, mod)
-	mod = mod or 0
-	local window_dimension = (api.nvim_list_uis()[1][dimension] - mod) -- width or height
-	local mwa = minimum_writing_area[dimension]
+-- 添加居中布局函数
+local function create_center_layout()
+	local ui = api.nvim_list_uis()[1]
+	local main_width = gwidth
+	local side_width = math.floor((ui.width - main_width) / 2)
 
-	if mwa >= window_dimension then
-		return 1
-	else
-		local wanted_available_size = (
-			dimension == "width" and padding.left + padding.right + mwa or padding.top + padding.bottom + mwa
-		)
-		if wanted_available_size > window_dimension then
-			local available_space = window_dimension - mwa -- available space for padding on each side (e.g. left and right)
-			return (available_space % 2 > 0 and ((available_space - 1) / 2) or available_space / 2)
-		else
-			return padding[orientation]
-		end
-	end
-end
+	-- 保存分割设置
+	local splitright = o.splitright
+	o.splitright = true
 
-local function layout(action)
-	if action == "generate" then
-		local splitbelow, splitright = o.splitbelow, o.splitright
-		o.splitbelow, o.splitright = true, true
+	-- 保存当前窗口为主窗口
+	win.main = api.nvim_get_current_win()
 
-		local left_padding = fix_padding("left", "width")
-		local right_padding = fix_padding("right", "width")
-		local top_padding = fix_padding("top", "height")
-		local bottom_padding = fix_padding("bottom", "height")
+	-- 创建左右padding窗口
+	win.left = pad_win("leftabove vnew", { width = side_width + 30 }, "wincmd l")
+	win.right = pad_win("vnew", { width = side_width - 30 }, "wincmd h")
 
-		win.main = api.nvim_get_current_win()
+	-- 设置主窗口宽度
+	api.nvim_win_set_width(win.main, main_width)
 
-		win.left = pad_win("leftabove vnew", { width = left_padding }, "wincmd l") -- left buffer
-		win.right = pad_win("vnew", { width = right_padding }, "wincmd h") -- right buffer
-		win.top = pad_win("leftabove new", { height = top_padding }, "wincmd j") -- top buffer
-		win.bottom = pad_win("rightbelow new", { height = bottom_padding }, "wincmd k") -- bottom buffer
-
-		o.splitbelow, o.splitright = splitbelow, splitright
-	else -- resize
-		local pad_sizes = {}
-		pad_sizes.left = fix_padding("left", "width")
-		pad_sizes.right = fix_padding("right", "width")
-		pad_sizes.top = fix_padding("top", "height")
-		pad_sizes.bottom = fix_padding("bottom", "height")
-
-		for point, dimension in pairs(CARDINAL_POINTS) do
-			if api.nvim_win_is_valid(win[point]) then
-				if dimension == "width" then
-					api.nvim_win_set_width(win[point], pad_sizes[point])
-				else
-					api.nvim_win_set_height(win[point], pad_sizes[point])
-				end
-			end
-		end
-	end
+	-- 恢复分割设置
+	o.splitright = splitright
 end
 
 function M.on()
@@ -217,7 +165,25 @@ function M.on()
 		require("true-zen.integrations.tmux").on()
 	end
 
-	layout("generate")
+	create_center_layout()
+	require("lualine").hide()
+
+	-- 添加窗口大小调整事件
+	api.nvim_create_autocmd({ "VimResized" }, {
+		callback = function()
+			if M.running then
+				local ui = api.nvim_list_uis()[1]
+				local side_width = math.floor((ui.width - gwidth) / 2)
+				if api.nvim_win_is_valid(win.left) then
+					api.nvim_win_set_width(win.left, side_width + 30)
+				end
+				if api.nvim_win_is_valid(win.right) then
+					api.nvim_win_set_width(win.right, side_width - 30)
+				end
+			end
+		end,
+		group = "TrueZenMinimalist",
+	})
 
 	M.running = true
 	data.do_callback("minimalist", "open", "pos")
@@ -225,6 +191,12 @@ end
 
 function M.off()
 	data.do_callback("minimalist", "close", "pre")
+
+	-- 清除所有padding窗口
+	if win.main and api.nvim_win_is_valid(win.main) then
+		api.nvim_set_current_win(win.main)
+	end
+	cmd("only")
 
 	api.nvim_create_augroup("TrueZenMinimalist", {
 		clear = true,
@@ -255,6 +227,8 @@ function M.off()
 		require("true-zen.integrations.tmux").off()
 	end
 
+	win = {}
+	require("lualine").hide({ unhide = true })
 	M.running = false
 	data.do_callback("minimalist", "close", "pos")
 end

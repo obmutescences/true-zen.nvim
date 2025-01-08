@@ -20,11 +20,14 @@ config.options = {
 				open_pre = nil,
 				open_pos = nil,
 				close_pre = nil,
-				close_pos = nil
+				close_pos = nil,
 			},
 		},
 		minimalist = {
 			ignored_buf_types = { "nofile" }, -- save current options from any window except ones displaying these kinds of buffers
+			minimum_writing_area = { -- minimum size of main window
+				width = 90,
+			},
 			options = { -- options to be disabled when entering Minimalist mode
 				number = false,
 				relativenumber = false,
@@ -36,13 +39,13 @@ config.options = {
 				showcmd = false,
 				showmode = false,
 				ruler = false,
-				numberwidth = 1
+				numberwidth = 1,
 			},
 			callbacks = { -- run functions when opening/closing Minimalist mode
 				open_pre = nil,
 				open_pos = nil,
 				close_pre = nil,
-				close_pos = nil
+				close_pos = nil,
 			},
 		},
 		narrow = {
@@ -56,7 +59,7 @@ config.options = {
 				open_pre = nil,
 				open_pos = nil,
 				close_pre = nil,
-				close_pos = nil
+				close_pos = nil,
 			},
 		},
 		focus = {
@@ -64,18 +67,18 @@ config.options = {
 				open_pre = nil,
 				open_pos = nil,
 				close_pre = nil,
-				close_pos = nil
+				close_pos = nil,
 			},
-		}
+		},
 	},
 	integrations = {
 		tmux = false, -- hide tmux status bar in (minimalist, ataraxis)
 		kitty = { -- increment font size in Kitty. Note: you must set `allow_remote_control socket-only` and `listen_on unix:/tmp/kitty` in your personal config (ataraxis)
 			enabled = false,
-			font = "+3"
+			font = "+3",
 		},
 		twilight = false, -- enable twilight (ataraxis)
-		lualine = false -- hide nvim-lualine (ataraxis)
+		lualine = false, -- hide nvim-lualine (ataraxis)
 	},
 }
 function config.set_options(opts)
